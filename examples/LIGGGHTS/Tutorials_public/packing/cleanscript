@@ -1,0 +1,18 @@
+#!/bin/bash 
+currDir=`pwd`
+source ~/.bashrc
+
+shopt -s expand_aliases
+cd post
+rm *.liggghts
+rm *.dump
+rm *.vtk
+cd ..
+
+rm log.*
+rm *.dat
+rm *.data
+rm *.mat
+rm *.fig
+rm *.png
+rm *.eps
