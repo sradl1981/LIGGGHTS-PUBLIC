@@ -73,13 +73,11 @@ run		1
 unfix		ins
 
 #calculate grow rate
-variable	Rgrowrate equal (${alphatarget}/${alphastart})^(${growevery}/(3.*${growts}))
-print		"The radius grow rate is ${Rgrowrate}"
+variable	RgrowRatio equal (${alphatarget}/${alphastart})^(${growevery}/(3.*${growts}))
+print		"The radius growth ratio is ${RgrowRatio}"
 
 #do the diameter grow
 compute 	rad all property/atom radius
-
-variable	dgrown atom ${Rgrowrate}*2.*c_rad
 fix		    grow all growth ${growevery} atom diameter v_dgrown
 
 dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_growth_grow
@@ -88,7 +86,6 @@ dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz
 run		${growts}
 
 #let the packing relax
-variable	dgrown atom 0.9999*2.0*c_rad
 run		${relaxts}
 
 

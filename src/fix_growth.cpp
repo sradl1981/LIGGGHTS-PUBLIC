@@ -105,7 +105,14 @@ Fix(lmp, narg, arg)
     } else break;
   }
 
+  //generate the growth variable
+  char *varargs[3];
+  varargs[0]=&variableToControlGrowth_[2];
+  varargs[1]=(char *)"atom";
+  varargs[2]=(char *)"1e-4";
 
+  input->variable->set(3,varargs); //add variable to global set of vars
+  printf("FixGrowth generated the variable with name: %s. \n", varargs[0]);
   fixAdapt_ = NULL; 
 }
 
@@ -113,6 +120,7 @@ Fix(lmp, narg, arg)
 
 FixGrowth::~FixGrowth()
 {
+
 }
 
 /* ---------------------------------------------------------------------- */
