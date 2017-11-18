@@ -64,11 +64,29 @@ class FixGrowth : public Fix {
  private:
 
   class FixAdapt *fixAdapt_;
+  int  ifixAdapt_;
   char fixid[100];
   char *nEveryString_;
   char *variableToControlGrowth_;
 
-  void change_variableForGrowth();
+  double updateInterval_;
+
+  bool   doDynamicGrowth_;
+
+  void   change_variableForGrowth();
+  void   initDynamicGrowth();
+
+  //Fixes for dynamic growth modeling
+  char *fix_name_supersaturation_;
+  char *fix_name_temperature_;
+  char *fix_name_sherwood_;
+  char *fix_name_saturationdensity_;
+  class FixPropertyAtom *fix_supersaturation_;
+  class FixPropertyAtom *fix_temperature_;
+  class FixPropertyAtom *fix_sherwood_;
+  class FixPropertyAtom *fix_saturationdensity_;
+  class FixPropertyGlobal* fix_diffusionConstant_;
+  class FixPropertyGlobal* fix_surfaceTensionConstant_;
 
 };
 

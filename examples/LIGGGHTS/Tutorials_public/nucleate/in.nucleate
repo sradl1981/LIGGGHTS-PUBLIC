@@ -36,7 +36,7 @@ fix 		m4 all property/global coefficientFriction peratomtypepair 1 0.5
 pair_style gran model hertz tangential history #Hertzian without cohesion
 pair_coeff	* *
 
-timestep	0.00001
+timestep	1e-5
 
 fix xwalls1 all wall/gran model hertz tangential history primitive type 1 xplane -0.05
 fix xwalls2 all wall/gran model hertz tangential history primitive type 1 xplane +0.05
@@ -76,10 +76,19 @@ unfix		ins
 variable	RgrowRatio equal (${alphatarget}/${alphastart})^(${growevery}/(3.*${growts}))
 print		"The radius growth ratio is ${RgrowRatio}"
 
-#do the diameter grow
-fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue 2.0003*c_radius
+#Option 1: do the diameter grow with a fixed geometric rate every ${growevery}
+#fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue 2*c_radius+1e-6
 
-dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_growth_grow
+#Option 2: do a dynamic growth based on an external fix
+fix         growSupersaturation all property/atom supersat scalar no yes no none
+fix         growTemperature all property/atom temp scalar no yes no none
+fix         growSherwood all property/atom sherwood scalar no yes no none
+fix         growSatDensity all property/atom saturationdensity scalar no yes no none
+fix         growdiffusionCoeff all property/global diffusionCoeff scalar 1e-6
+fix         growSurfTension all property/global surfaceTension scalar 0.07
+fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue DYNAMIC
+
+dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_fixGrowth_grow
 
 #run
 run		${growts}
