@@ -76,28 +76,43 @@ Fix(lmp, narg, arg)
     strcpy(nEveryString_,&arg[3][0]);
 
     int iarg = 4;
+    char *growToValue;
+    growToValue = new char[1]; growToValue = (char *)"0";
 
-  while (iarg < narg) {
-    if (strcmp(arg[iarg],"atom") == 0) {
-      if (iarg+3 > narg) error->all(FLERR,"Illegal fix adapt command");
-      if (strcmp(arg[iarg+1],"diameter") == 0) {
-        //XXX: do nothing now, use in future to make settings if necessary
-      } else error->all(FLERR,"Illegal fix adapt command");
-      if (strstr(arg[iarg+2],"v_") == arg[iarg+2]) {
-        int n = strlen(&arg[iarg+2][0]) + 1;
-        variableToControlGrowth_ = new char[n];
-        strcpy(variableToControlGrowth_,&arg[iarg+2][0]);
-      } else error->all(FLERR,"Illegal fix adapt command");
-      iarg += 3;
+    while (iarg < narg) {
+        if (strcmp(arg[iarg],"atom") == 0) {
+              if (iarg+3 > narg) error->all(FLERR,"Illegal fix adapt command");
+              if (strcmp(arg[iarg+1],"diameter") == 0) {
+                //XXX: do nothing now, use in future to make settings if necessary
+              } else error->all(FLERR,"Illegal fix adapt command");
+              if (strstr(arg[iarg+2],"v_") == arg[iarg+2]) {
+                int n = strlen(&arg[iarg+2][0]) + 1;
+                variableToControlGrowth_ = new char[n];
+                strcpy(variableToControlGrowth_,&arg[iarg+2][0]);
+              } else error->all(FLERR,"Illegal fix adapt command. Cannot find 'v_' keyword.");
+              if (strstr(arg[iarg+3],"growToValue") == arg[iarg+3]) {
+                if(narg<9) error->all(FLERR,"Input after keyword 'growToValue' expected .");
+                int n = strlen(&arg[iarg+4][0]) + 1;
+                growToValue = new char[n];
+                strcpy(growToValue,&arg[iarg+4][0]);
+              } else error->all(FLERR,"Illegal fix adapt command. Cannot find 'growToValue' keyword.");
+        iarg += 3;
     } else break;
   }
+
+  //generate a compute that calculates the particle radius
+  char *computearg[4];
+  computearg[0]=(char *)"radius";
+  computearg[1]=(char *)"all";
+  computearg[2]=(char *)"property/atom";
+  computearg[3]=(char *)"radius";
+  modify->add_compute(4,computearg,lmp->suffix);
 
   //generate the growth variable
   char *varargs[3];
   varargs[0]=&variableToControlGrowth_[2];
   varargs[1]=(char *)"atom";
-  varargs[2]=(char *)"1e-4";
-
+  varargs[2]=growToValue;
   input->variable->set(3,varargs); //add variable to global set of vars
   printf("FixGrowth generated the variable with name: %s. \n", varargs[0]);
   fixAdapt_ = NULL; 
@@ -144,7 +159,6 @@ void FixGrowth::pre_delete(bool unfixflag)
 }
 
 /* ---------------------------------------------------------------------- */
-
 int FixGrowth::setmask()
 {
   int mask = 0;
@@ -153,5 +167,22 @@ int FixGrowth::setmask()
   return mask;
 }
 
+/* ---------------------------------------------------------------------- */
+void FixGrowth::setup_pre_force(int vflag)
+{
+  change_variableForGrowth();
+}
 
+/* ---------------------------------------------------------------------- */
+void FixGrowth::pre_force(int vflag)
+{
+  if (nevery == 0) return;
+  if (update->ntimestep % nevery) return;
+  change_variableForGrowth();
+}
 
+/* ---------------------------------------------------------------------- */
+void FixGrowth::change_variableForGrowth()
+{
+    //This implements the growth physics!
+}

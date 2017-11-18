@@ -77,8 +77,7 @@ variable	RgrowRatio equal (${alphatarget}/${alphastart})^(${growevery}/(3.*${gro
 print		"The radius growth ratio is ${RgrowRatio}"
 
 #do the diameter grow
-compute 	rad all property/atom radius
-fix		    grow all growth ${growevery} atom diameter v_dgrown
+fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue 2.0003*c_radius
 
 dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_growth_grow
 

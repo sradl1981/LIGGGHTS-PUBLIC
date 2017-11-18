@@ -58,12 +58,17 @@ class FixGrowth : public Fix {
   void post_create(); 
   void pre_delete(bool unfixflag); 
 
+  void setup_pre_force(int);
+  void pre_force(int);
+
  private:
 
   class FixAdapt *fixAdapt_;
   char fixid[100];
   char *nEveryString_;
   char *variableToControlGrowth_;
+
+  void change_variableForGrowth();
 
 };
 
