@@ -64,6 +64,7 @@ class FixGrowth : public Fix {
  private:
 
   class FixAdapt *fixAdapt_;
+  char *variableArgs_[3];
   int  ifixAdapt_;
   char fixid[100];
   char *nEveryString_;
@@ -85,8 +86,17 @@ class FixGrowth : public Fix {
   class FixPropertyAtom *fix_temperature_;
   class FixPropertyAtom *fix_sherwood_;
   class FixPropertyAtom *fix_saturationdensity_;
+
+  char *fix_name_supersaturationCrit_;
+  char *fix_name_diffusionConstant_;
+  char *fix_name_surfaceTensionConstant_;
+  class FixPropertyGlobal* fix_supersaturationCrit_; //this indirectly sets the size of the nuclei
   class FixPropertyGlobal* fix_diffusionConstant_;
   class FixPropertyGlobal* fix_surfaceTensionConstant_;
+
+  double supersaturationCrit_;
+  double diffusionConstant_;
+  double surfaceTensionConstant_;
 
 };
 

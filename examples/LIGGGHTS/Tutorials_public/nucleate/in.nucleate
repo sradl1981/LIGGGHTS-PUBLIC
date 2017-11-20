@@ -3,9 +3,10 @@
 #parameters for gradually growing particle diameter
 variable	alphastart equal 0.10
 variable	alphatarget equal 0.15
-variable	growts equal 50000
+variable	growts equal 20000
 variable	growevery equal 40
-variable	relaxts equal 20000
+variable	relaxts equal 50000
+variable    particleDensity equal 2500
 
 
 atom_style	granular
@@ -47,8 +48,8 @@ fix zwalls2 all wall/gran model hertz tangential history primitive type 1 zplane
 
 
 #distributions for insertion
-fix		pts1 all particletemplate/sphere 15485863 atom_type 1 density constant 2500 radius constant 0.005
-fix		pts2 all particletemplate/sphere 15485867 atom_type 1 density constant 2500 radius constant 0.008
+fix		pts1 all particletemplate/sphere 15485863 atom_type 1 density constant ${particleDensity} radius constant 0.005
+fix		pts2 all particletemplate/sphere 15485867 atom_type 1 density constant ${particleDensity} radius constant 0.008
 fix		pdd1 all particledistribution/discrete 32452843 2 pts1 0.3 pts2 0.7
 
 #region and insertion
@@ -65,7 +66,7 @@ fix		integr nve_group nve/sphere
 #output settings, include total thermal energy
 compute		1 all erotate/sphere
 thermo_style	custom step atoms ke c_1 vol
-thermo		1000
+thermo		200
 thermo_modify	lost ignore norm no
 
 #insert the first particles
@@ -80,20 +81,33 @@ print		"The radius growth ratio is ${RgrowRatio}"
 #fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue 2*c_radius+1e-6
 
 #Option 2: do a dynamic growth based on an external fix
-fix         growSupersaturation all property/atom supersat scalar no yes no none
-fix         growTemperature all property/atom temp scalar no yes no none
-fix         growSherwood all property/atom sherwood scalar no yes no none
-fix         growSatDensity all property/atom saturationdensity scalar no yes no none
-fix         growdiffusionCoeff all property/global diffusionCoeff scalar 1e-6
-fix         growSurfTension all property/global surfaceTension scalar 0.07
+fix         supersat all property/atom supersat scalar no yes no none
+fix         temp all property/atom temp scalar no yes no none
+fix         sherwood all property/atom sherwood scalar no yes no none
+fix         saturationdensity all property/atom saturationdensity scalar no yes no none
+fix         supersaturationCrit all property/global supersaturationCrit scalar 1.2
+fix         diffusionCoeff all property/global diffusionCoeff scalar 1e-4
+fix         surfaceTension all property/global surfaceTension scalar 0.7
+#set the inactive radius below which particles will be considered pseudo particles. WARNING: MUST be SMALLER than critical radius of particles (radius of the nuclei!)
+variable	radiusIncactive equal  5.0e-3 #note: variables are NON-group-specific!
+run 0
 fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue DYNAMIC
 
-dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_fixGrowth_grow
+dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_fixGrowth_grow f_supersat
+
+#Initi all per-atom properties to reasonable values
+set group      all  property/atom supersat 0.95
+set group      all  property/atom temp 300
+set group      all  property/atom sherwood 2
+set group      all  property/atom saturationdensity 123.4
 
 #run
+region	regNucleation block INF INF INF INF 0.100 INF units box 
+set		region regNucleation property/atom supersat 1.50
 run		${growts}
 
 #let the packing relax
+set		group      all  property/atom supersat 0.99
 run		${relaxts}
 
 

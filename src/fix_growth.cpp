@@ -113,22 +113,23 @@ Fix(lmp, narg, arg)
   modify->add_compute(4,computearg,lmp->suffix);
 
   //generate the growth variable, and activate dynamic growth if necessary
-  fix_name_supersaturation_ =  new char[20];
-  fix_name_temperature_ =  new char[20];
-  fix_name_sherwood_ =  new char[20];
-  fix_name_saturationdensity_ =  new char[20];
+  fix_name_supersaturation_ =  new char[40];
+  fix_name_temperature_ =  new char[40];
+  fix_name_sherwood_ =  new char[40];
+  fix_name_saturationdensity_ =  new char[40];
 
-  char *varargs[3];
-  varargs[0]=&variableToControlGrowth_[2];
-  varargs[1]=(char *)"atom";
+  variableArgs_[0]=&variableToControlGrowth_[2];
+  variableArgs_[1]=(char *)"atom";
   if(strcmp(growToValue,"DYNAMIC")==0) 
   { 
     strcpy(fix_name_supersaturation_, "supersat"); //TODO:hardcoded, might want to read in
     strcpy(fix_name_temperature_, "temp"); //TODO:hardcoded, might want to read in
     strcpy(fix_name_sherwood_, "sherwood"); //TODO:hardcoded, might want to read in
     strcpy(fix_name_saturationdensity_, "saturationdensity"); //TODO:hardcoded, might want to read in
-    initDynamicGrowth();
-    varargs[2]=(char *)"2.0*c_radius"; //do not grow, just keep the same for now
+    strcpy(fix_name_supersaturationCrit_, "supersaturationCrit"); //TODO:hardcoded, might want to read in
+    strcpy(fix_name_diffusionConstant_, "diffusionCoeff"); //TODO:hardcoded, might want to read in
+    strcpy(fix_name_surfaceTensionConstant_, "surfaceTension"); //TODO:hardcoded, might want to read in
+    initDynamicGrowth(); //this also sets the variable!
   }
   else
   {
@@ -136,15 +137,21 @@ Fix(lmp, narg, arg)
       strcpy(fix_name_temperature_, "N/A");
       strcpy(fix_name_sherwood_, "N/A");
       strcpy(fix_name_saturationdensity_, "N/A");
-      varargs[2]=growToValue;
+      strcpy(fix_name_supersaturationCrit_, "N/A");
+      strcpy(fix_name_diffusionConstant_, "N/A"); 
+      strcpy(fix_name_surfaceTensionConstant_, "N/A");
+      variableArgs_[2]=growToValue;
+      input->variable->set(3,variableArgs_); //add variable to global set of vars
+      printf("FixGrowth generated the MAIN variable with name: %s and value %s. \n", 
+             variableArgs_[0], variableArgs_[2]);
   }
-  input->variable->set(3,varargs); //add variable to global set of vars
-  printf("FixGrowth generated the variable with name: %s. \n", varargs[0]);
+
   fixAdapt_ = NULL; 
   ifixAdapt_= -1;
 
   fix_supersaturation_ = NULL;
   fix_temperature_     = NULL;
+  fix_supersaturationCrit_ = NULL;
   fix_diffusionConstant_ = NULL;
   fix_surfaceTensionConstant_ = NULL;
 
@@ -216,10 +223,7 @@ void FixGrowth::pre_force(int vflag)
 void FixGrowth::change_variableForGrowth()
 {
     if(!doDynamicGrowth_) return;
-
-    printf("FixGrowth::change_variableForGrowth(). \n");
-    //This implements the growth physics!
-    //must loop over the particles, and set the variable for growth individually
+    //One may implement changes to the growth variables if required here
 }
 
 /* ---------------------------------------------------------------------- */
@@ -240,9 +244,50 @@ void FixGrowth::initDynamicGrowth()
     fix_saturationdensity_ =
         static_cast<FixPropertyAtom*>(modify->find_fix_property(fix_name_saturationdensity_,"property/atom","scalar",0,0,style));
 
-    fix_diffusionConstant_=static_cast<FixPropertyGlobal*>(modify->find_fix_property("diffusionCoeff","property/global","scalar",0,0,style));
+    //Read globals, and set doubles here (CANNOT set later!)
+    fix_supersaturationCrit_=static_cast<FixPropertyGlobal*>(modify->find_fix_property(fix_name_supersaturationCrit_,"property/global","scalar",0,0,style));
+    supersaturationCrit_ = fix_supersaturationCrit_->compute_scalar();
 
-    fix_surfaceTensionConstant_=static_cast<FixPropertyGlobal*>(modify->find_fix_property("surfaceTension","property/global","scalar",0,0,style));
+    fix_diffusionConstant_=static_cast<FixPropertyGlobal*>(modify->find_fix_property(fix_name_diffusionConstant_,"property/global","scalar",0,0,style));
+    diffusionConstant_ = fix_diffusionConstant_->compute_scalar();
+
+    //This is the whole term \sigma/rho_L/R!!
+    fix_surfaceTensionConstant_=static_cast<FixPropertyGlobal*>(modify->find_fix_property(fix_name_surfaceTensionConstant_,"property/global","scalar",0,0,style));
+    surfaceTensionConstant_ = fix_surfaceTensionConstant_->compute_scalar();
+
+    //*************************************************************
+    //This implements the nucleation and growth physics!
+    //generate variable for critical radius_
+    char *variableArgsCritRad_[3];
+    char vararg[300];
+    variableArgsCritRad_[0]=(char *)"critRadius";
+    variableArgsCritRad_[1]=(char *)"atom";
+    sprintf(vararg,"%g/(f_%s*ln(f_%s+1e-6)+1e-6)",
+            2*surfaceTensionConstant_, fix_name_temperature_, fix_name_supersaturation_);
+    variableArgsCritRad_[2]=vararg; 
+    input->variable->set(3,variableArgsCritRad_); //add variable to global set of vars
+    printf("FixGrowth generated the variable with name: %s and content %s.  \n",
+           variableArgsCritRad_[0], variableArgsCritRad_[2]);
+
+    //generate variable for growthrate
+    variableArgsCritRad_[0]=(char *)"growthrate";
+    variableArgsCritRad_[1]=(char *)"atom";
+    sprintf(vararg,"2*f_%s/c_radius*f_%s/v_particleDensity*(f_%s-1)*%g",
+            fix_name_sherwood_,fix_name_saturationdensity_,fix_name_supersaturation_, diffusionConstant_);
+    variableArgsCritRad_[2]=vararg;
+    input->variable->set(3,variableArgsCritRad_); //add variable to global set of vars
+    printf("FixGrowth generated the variable with name: %s and content %s. \n", 
+           variableArgsCritRad_[0], variableArgsCritRad_[2]);
+
+    //generate the main variable for the size (=diameter) of the particle
+    sprintf(vararg,"(c_radius<=v_radiusIncactive)*((f_supersat>%.6g)*v_critRadius+(f_supersat<=%.6g)*2*c_radius)+(c_radius>v_radiusIncactive)*(2*c_radius+v_growthrate*%g)",
+            supersaturationCrit_, supersaturationCrit_, updateInterval_);
+    variableArgs_[2]=vararg;
+    printf("FixGrowth reset the value of the growth variable to: %s. \n", variableArgs_[2]);
+    input->variable->set(3,variableArgs_); //add variable to global set of vars
+
+    //*************************************************************
+    printf("FixGrowth::initDynamicGrowth() DONE! \n");
 
 }
 
