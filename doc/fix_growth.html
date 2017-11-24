@@ -1,0 +1,96 @@
+<HTML>
+<CENTER><A HREF = "http://www.cfdem.com">LIGGGHTS(R)-PUBLIC WWW Site</A> - <A HREF = "Manual.html">LIGGGHTS(R)-PUBLIC Documentation</A> - <A HREF = "Section_commands.html#comm">LIGGGHTS(R)-PUBLIC Commands</A> 
+</CENTER>
+
+
+
+
+
+
+<HR>
+
+<H3>fix growth command 
+</H3>
+<P><B>Syntax:</B>
+</P>
+<PRE>fix ID group-ID growth N atom diameter variableNameForGrowth growToValue growValue variableNames <4variableNames> 
+</PRE>
+<UL><LI>ID, group-ID are documented in <A HREF = "fix.html">fix</A> command 
+
+<LI>growth = style name of this fix command 
+
+<LI>N = adapt simulation settings every this many timesteps 
+
+<LI>atom diameter = mandatory keywords 
+
+<LI>variableNameForGrowth = mandatory name of the variable to store growth. Must start with 'v_' 
+
+<LI>growToValue = mandatory keyword 
+
+<LI>growValue = either a fixed numerical value, or 'DYNAMIC'. The latter will activate a dynamic calculation of the diameter. 
+
+<LI>variableNames = optional keyword to activate the input for the variable names that control the DYNAMIC diameter adjustment 
+
+<LI><4variableNames> = mandatory keyword in case 'variableNames' is set. The default variableNames are: supersatFluid heatFluid saturationdensity supersatTransCoeff. These values will be overwritten by the specified variable names. For each of these variables, a fix property/atom must exist before this fix is called! 
+
+
+</UL>
+<PRE><B>Examples:</B>
+variable    particleDensity equal 2500 
+</PRE>
+<PRE>variable    radiusInactive equal  5.0e-3  
+</PRE>
+<PRE>fix         supersaturationCrit all property/global supersaturationCrit scalar 1.2 
+</PRE>
+<PRE>fix         surfaceTension all property/global surfaceTension scalar 0.7 
+</PRE>
+<PRE>fix         supersatFluid all property/atom supersatFluid scalar no yes no none 
+</PRE>
+<PRE>fix         temp all property/atom temp scalar no yes no none 
+</PRE>
+<PRE>fix         saturationdensity all property/atom saturationdensity scalar no yes no none 
+</PRE>
+<PRE>fix         transferCoefficient all property/atom transferCoefficient scalar no yes no none  
+</PRE>
+<PRE>fix         grow all growth 100 atom diameter v_dgrown growToValue DYNAMIC variableNames supersatFluid temp saturationdensity transferCoefficient 
+</PRE>
+<P><B>Description:</B>
+</P>
+<P>This fix wraps around the "fix adapt" command to more elegantly
+control the growth of particles. 
+The "DYNAMIC" option allows the user to grow the particles depending
+on local conditions (e.g., the supersaturation). Therefore, a simple
+nucleation-growth model has been implemented (hardcoded) that 
+sets the particle diameter dynamically during a simulation.
+</P>
+<P>Important Note: for the 'DYNAMIC' option the user must create a number
+of fix property/atom, fix property/global, and variables. 
+</P>
+<LI>property/atom: 4 fixes corresponding to the variableNames 
+
+<LI>property/global: (i) supersaturationCrit, (ii) surfaceTension 
+
+<LI>variables : (i) radiusInactive, (ii) particleDensity 
+
+<P>Note, that particles with a radius lower than 'radiusInactive' are 
+not considered for growth (i.e., they are considered as
+ un-nucleated seeds). Thus, one can add particles with very small
+diameter (below 'radiusInactive'), track them through a given region,
+and let them nucleate once the fluid surrounding them has exceeded
+the critical supersaturation specified by 'supersaturationCrit'.
+</P>
+<HR>
+
+<P><B>Restart, fix_modify, output, run start/stop, minimize info:</B>
+</P>
+<P>Untested / not implemented at this point in time.
+</P>
+<P><B>Restrictions:</B> can currently only grow the particle diameter
+</P>
+<P><B>Related commands:</B>
+</P>
+<P><B>Default:</B>
+</P>
+<P>The default variableNames are: supersatFluid heatFluid saturationdensity supersatTransCoeff
+</P>
+</HTML>

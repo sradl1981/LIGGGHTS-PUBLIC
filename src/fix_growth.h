@@ -81,22 +81,19 @@ class FixGrowth : public Fix {
   bool dynamicGrowthVariableNamesSet_;
   char *fix_name_supersaturation_;
   char *fix_name_temperature_;
-  char *fix_name_sherwood_;
+  char *fix_name_transferCoefficient_;
   char *fix_name_saturationdensity_;
   class FixPropertyAtom *fix_supersaturation_;
   class FixPropertyAtom *fix_temperature_;
-  class FixPropertyAtom *fix_sherwood_;
+  class FixPropertyAtom *fix_transferCoefficient_;
   class FixPropertyAtom *fix_saturationdensity_;
 
   char *fix_name_supersaturationCrit_;
-  char *fix_name_diffusionConstant_;
   char *fix_name_surfaceTensionConstant_;
   class FixPropertyGlobal* fix_supersaturationCrit_; //this indirectly sets the size of the nuclei
-  class FixPropertyGlobal* fix_diffusionConstant_;
   class FixPropertyGlobal* fix_surfaceTensionConstant_;
 
   double supersaturationCrit_;
-  double diffusionConstant_;
   double surfaceTensionConstant_;
 
 };

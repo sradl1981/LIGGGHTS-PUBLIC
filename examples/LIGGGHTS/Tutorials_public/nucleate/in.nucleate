@@ -73,42 +73,45 @@ thermo_modify	lost ignore norm no
 run		1
 unfix		ins
 
+#--------------------------------------------------------------
 #calculate grow rate
-variable	RgrowRatio equal (${alphatarget}/${alphastart})^(${growevery}/(3.*${growts}))
-print		"The radius growth ratio is ${RgrowRatio}"
 
 #Option 1: do the diameter grow with a fixed geometric rate every ${growevery}
+#variable	RgrowRatio equal (${alphatarget}/${alphastart})^(${growevery}/(3.*${growts}))
+#print		"The radius growth ratio is ${RgrowRatio}"
 #fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue 2*c_radius+1e-6
 
-#Option 2: do a dynamic growth based on an external fix
-fix         supersat all property/atom supersat scalar no yes no none
+#Option 2: do a dynamic growth based on given fluid properties
+fix         supersatFluid all property/atom supersatFluid scalar no yes no none
 fix         temp all property/atom temp scalar no yes no none
-fix         sherwood all property/atom sherwood scalar no yes no none
 fix         saturationdensity all property/atom saturationdensity scalar no yes no none
+fix         transferCoefficient all property/atom transferCoefficient scalar no yes no none
+
 fix         supersaturationCrit all property/global supersaturationCrit scalar 1.2
-fix         diffusionCoeff all property/global diffusionCoeff scalar 1e-4
 fix         surfaceTension all property/global surfaceTension scalar 0.7
 #set the inactive radius below which particles will be considered pseudo particles. WARNING: MUST be SMALLER than critical radius of particles (radius of the nuclei!)
 variable	radiusInactive equal  5.0e-3 #note: variables are NON-group-specific!
 run 0
 fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue DYNAMIC &
-            variableNames supersat temp saturationdensity sherwood 
+            variableNames supersatFluid temp saturationdensity transferCoefficient
+#Note: default variableNames are: supersatFluid heatFluid saturationdensity supersatTransCoeff
+    
 
-dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_fixGrowth_grow f_supersat
+dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_fixGrowth_grow f_supersatFluid
 
 #Initi all per-atom properties to reasonable values
-set group      all  property/atom supersat 0.95
+set group      all  property/atom supersatFluid 0.95
 set group      all  property/atom temp 300
-set group      all  property/atom sherwood 2
+set group      all  property/atom transferCoefficient 1e-3
 set group      all  property/atom saturationdensity 123.4
 
 #run
 region	regNucleation block INF INF INF INF 0.100 INF units box 
-set		region regNucleation property/atom supersat 1.50
+set		region regNucleation property/atom supersatFluid 1.50
 run		${growts}
 
 #let the packing relax
-set		group      all  property/atom supersat 0.99
+set		group      all  property/atom supersatFluid 0.99
 run		${relaxts}
 
 
