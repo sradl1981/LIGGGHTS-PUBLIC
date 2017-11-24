@@ -67,6 +67,15 @@ FixGrowth::FixGrowth(LAMMPS *lmp, int narg, char **arg) :
 Fix(lmp, narg, arg)
 {
     doDynamicGrowth_ = false;
+    dynamicGrowthVariableNamesSet_ = false;
+
+    fix_name_supersaturation_ =  new char[40];
+    fix_name_temperature_ =  new char[40];
+    fix_name_saturationdensity_ =  new char[40];
+    fix_name_sherwood_ =  new char[40];
+    fix_name_supersaturationCrit_ =  new char[40];
+    fix_name_diffusionConstant_ =  new char[40];
+    fix_name_surfaceTensionConstant_ =  new char[40];
 
     if (narg < 5) error->all(FLERR,"Illegal fix adapt command");
     nevery = force->inumeric(FLERR,arg[3]);
@@ -88,6 +97,7 @@ Fix(lmp, narg, arg)
               if (iarg+3 > narg) error->all(FLERR,"Illegal fix adapt command");
               if (strcmp(arg[iarg+1],"diameter") == 0) {
                 //do nothing now, may use in future to make other settings if necessary
+                
               } else error->all(FLERR,"Illegal fix adapt command");
               if (strstr(arg[iarg+2],"v_") == arg[iarg+2]) {
                 int n = strlen(&arg[iarg+2][0]) + 1;
@@ -100,32 +110,49 @@ Fix(lmp, narg, arg)
                 growToValue = new char[n];
                 strcpy(growToValue,&arg[iarg+4][0]);
               } else error->all(FLERR,"Illegal fix adapt command. Cannot find 'growToValue' keyword.");
-        iarg += 3;
+        iarg += 4;
+    }
+    else if(iarg+1<narg) {
+        if(strcmp(growToValue,"DYNAMIC")==0 && strcmp(arg[iarg+1],"variableNames") == 0) 
+        {   
+            printf("FixGrowth reads in now the variable names that control dynamic growth... \n");
+            if(iarg+5<narg)
+            {
+                strcpy(fix_name_supersaturation_, arg[iarg+2]);
+                strcpy(fix_name_temperature_, arg[iarg+3]);
+                strcpy(fix_name_saturationdensity_, arg[iarg+4]);
+                strcpy(fix_name_sherwood_,  arg[iarg+5]); 
+                dynamicGrowthVariableNamesSet_ = true;
+            } else error->all(FLERR,"FixGrowth requires 4 variable names following 'variableNames'.");
+        }
+        iarg++;
     } else break;
   }
 
   //generate a compute that calculates the particle radius
+  printf("FixGrowth is generating the compute 'c_radius'. \n");
   char *computearg[4];
   computearg[0]=(char *)"radius";
   computearg[1]=(char *)"all";
   computearg[2]=(char *)"property/atom";
   computearg[3]=(char *)"radius";
   modify->add_compute(4,computearg,lmp->suffix);
+  printf("...generation of compute done! \n");
 
   //generate the growth variable, and activate dynamic growth if necessary
-  fix_name_supersaturation_ =  new char[40];
-  fix_name_temperature_ =  new char[40];
-  fix_name_sherwood_ =  new char[40];
-  fix_name_saturationdensity_ =  new char[40];
 
   variableArgs_[0]=&variableToControlGrowth_[2];
   variableArgs_[1]=(char *)"atom";
+  printf("FixGrowth is generating the variable '%s' with value '%s'. \n", variableToControlGrowth_, growToValue);
   if(strcmp(growToValue,"DYNAMIC")==0) 
   { 
-    strcpy(fix_name_supersaturation_, "supersat"); //TODO:hardcoded, might want to read in
-    strcpy(fix_name_temperature_, "temp"); //TODO:hardcoded, might want to read in
-    strcpy(fix_name_sherwood_, "sherwood"); //TODO:hardcoded, might want to read in
-    strcpy(fix_name_saturationdensity_, "saturationdensity"); //TODO:hardcoded, might want to read in
+    if(!dynamicGrowthVariableNamesSet_)
+    {
+        strcpy(fix_name_supersaturation_, "supersatFluid"); 
+        strcpy(fix_name_temperature_, "heatFluid"); 
+        strcpy(fix_name_saturationdensity_, "saturationdensity");
+        strcpy(fix_name_sherwood_, "supersatTransCoeff"); 
+    }
     strcpy(fix_name_supersaturationCrit_, "supersaturationCrit"); //TODO:hardcoded, might want to read in
     strcpy(fix_name_diffusionConstant_, "diffusionCoeff"); //TODO:hardcoded, might want to read in
     strcpy(fix_name_surfaceTensionConstant_, "surfaceTension"); //TODO:hardcoded, might want to read in
@@ -145,6 +172,7 @@ Fix(lmp, narg, arg)
       printf("FixGrowth generated the MAIN variable with name: %s and value %s. \n", 
              variableArgs_[0], variableArgs_[2]);
   }
+  printf("...generation of variable done! \n");
 
   fixAdapt_ = NULL; 
   ifixAdapt_= -1;
@@ -280,7 +308,7 @@ void FixGrowth::initDynamicGrowth()
            variableArgsCritRad_[0], variableArgsCritRad_[2]);
 
     //generate the main variable for the size (=diameter) of the particle
-    sprintf(vararg,"(c_radius<=v_radiusIncactive)*((f_supersat>%.6g)*v_critRadius+(f_supersat<=%.6g)*2*c_radius)+(c_radius>v_radiusIncactive)*(2*c_radius+v_growthrate*%g)",
+    sprintf(vararg,"(c_radius<=v_radiusInactive)*((f_supersat>%.6g)*v_critRadius+(f_supersat<=%.6g)*2*c_radius)+(c_radius>v_radiusInactive)*(2*c_radius+v_growthrate*%g)",
             supersaturationCrit_, supersaturationCrit_, updateInterval_);
     variableArgs_[2]=vararg;
     printf("FixGrowth reset the value of the growth variable to: %s. \n", variableArgs_[2]);

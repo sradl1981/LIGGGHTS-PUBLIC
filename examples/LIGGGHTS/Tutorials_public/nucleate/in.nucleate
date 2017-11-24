@@ -89,9 +89,10 @@ fix         supersaturationCrit all property/global supersaturationCrit scalar 1
 fix         diffusionCoeff all property/global diffusionCoeff scalar 1e-4
 fix         surfaceTension all property/global surfaceTension scalar 0.7
 #set the inactive radius below which particles will be considered pseudo particles. WARNING: MUST be SMALLER than critical radius of particles (radius of the nuclei!)
-variable	radiusIncactive equal  5.0e-3 #note: variables are NON-group-specific!
+variable	radiusInactive equal  5.0e-3 #note: variables are NON-group-specific!
 run 0
-fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue DYNAMIC
+fix		    grow all growth ${growevery} atom diameter v_dgrown growToValue DYNAMIC &
+            variableNames supersat temp saturationdensity sherwood 
 
 dump		dmp all custom 500 post/packing_*.liggghts id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_adaptProp_fixGrowth_grow f_supersat
 

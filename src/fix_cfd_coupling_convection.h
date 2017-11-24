@@ -67,9 +67,13 @@ class FixCfdCouplingConvection : public Fix {
 
  protected:
   bool is_convection_;
+  bool registerTransferCoeffAndFluid_;
   class FixCfdCoupling* fix_coupling_;
   class FixPropertyAtom* fix_additionalFlux_; 
   class FixPropertyAtom* fix_heatFlux_;
+  class FixPropertyAtom* fix_heatFluid_;
+  class FixPropertyAtom* fix_heatTransCoeff_;
+
   double T0_;
 };
 

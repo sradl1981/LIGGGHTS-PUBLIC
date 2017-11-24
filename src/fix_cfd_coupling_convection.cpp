@@ -63,9 +63,12 @@ using namespace FixConst;
 FixCfdCouplingConvection::FixCfdCouplingConvection(LAMMPS *lmp, int narg, char **arg) :
    Fix(lmp, narg, arg),
    is_convection_(true),
+   registerTransferCoeffAndFluid_(false),
    fix_coupling_(0),
    fix_additionalFlux_(0),
-   fix_heatFlux_(0)
+   fix_heatFlux_(0),
+   fix_heatFluid_(0),
+   fix_heatTransCoeff_(0)
 {
     int iarg = 3;
 
@@ -80,6 +83,14 @@ FixCfdCouplingConvection::FixCfdCouplingConvection(LAMMPS *lmp, int narg, char *
 
     if(T0_ < 0.)
         error->fix_error(FLERR,this,"T0 must be >= 0");
+
+    if(iarg < narg)
+    {
+        if(strcmp(arg[iarg++],"registerTransferCoeffAndFluid") == 0)  
+            registerTransferCoeffAndFluid_ = true;
+        else
+            error->fix_error(FLERR,this,"Expected keyword 'registerTransferCoeffAndFluid'. Leave this keyword, or set it!");
+    }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -96,6 +107,12 @@ void FixCfdCouplingConvection::pre_delete(bool unfixflag)
         modify->delete_fix("convectiveHeatFlux");
     if(fix_additionalFlux_ && !is_convection_)
         modify->delete_fix("radiativeHeatFlux");
+
+    if(registerTransferCoeffAndFluid_)
+    {
+        if(fix_heatFluid_)       modify->delete_fix("heatFluid");
+        if(fix_heatTransCoeff_)  modify->delete_fix("heatTransCoeff");
+    }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -126,6 +143,38 @@ void FixCfdCouplingConvection::post_create()
         fixarg[8]="0.";
         fix_additionalFlux_ = modify->add_fix_property_atom(9,const_cast<char**>(fixarg),style);
   }
+
+  if(!fix_heatFluid_)
+  {
+        const char* fixarg[11];
+        fixarg[0]="heatFluid";
+        fixarg[1]="all";
+        fixarg[2]="property/atom";
+        fixarg[3]="heatFluid";
+        fixarg[4]="scalar";
+        fixarg[5]="no";
+        fixarg[6]="yes";
+        fixarg[7]="no";
+        fixarg[8]="0.";
+        fix_heatFluid_ = modify->add_fix_property_atom(9,const_cast<char**>(fixarg),style);
+  }
+
+  if(!fix_heatTransCoeff_)
+  {
+        const char* fixarg[11];
+        fixarg[0]="heatTransCoeff";
+        fixarg[1]="all";
+        fixarg[2]="property/atom";
+        fixarg[3]="heatTransCoeff";
+        fixarg[4]="scalar";
+        fixarg[5]="no";
+        fixarg[6]="yes";
+        fixarg[7]="no";
+        fixarg[8]="0.";
+        fix_heatTransCoeff_ = modify->add_fix_property_atom(9,const_cast<char**>(fixarg),style);
+  }
+
+
 
   //  add heat transfer model if not yet active
   FixScalarTransportEquation *fix_ste = modify->find_fix_scalar_transport_equation("heattransfer");
@@ -174,6 +223,13 @@ void FixCfdCouplingConvection::init()
         fix_coupling_->add_pull_property("convectiveHeatFlux","scalar-atom");
     else
         fix_coupling_->add_pull_property("radiativeHeatFlux","scalar-atom");
+
+    if(registerTransferCoeffAndFluid_)
+    {
+        fix_coupling_->add_pull_property("heatTransCoeff","scalar-atom");
+        fix_coupling_->add_pull_property("heatFluid","scalar-atom");
+    }
+
 
     // heat transfer added heatFlux, get reference to it
     fix_heatFlux_ = static_cast<FixPropertyAtom*>(modify->find_fix_property("heatFlux","property/atom","scalar",0,0,style));

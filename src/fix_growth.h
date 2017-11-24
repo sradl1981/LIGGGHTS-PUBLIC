@@ -78,6 +78,7 @@ class FixGrowth : public Fix {
   void   initDynamicGrowth();
 
   //Fixes for dynamic growth modeling
+  bool dynamicGrowthVariableNamesSet_;
   char *fix_name_supersaturation_;
   char *fix_name_temperature_;
   char *fix_name_sherwood_;
