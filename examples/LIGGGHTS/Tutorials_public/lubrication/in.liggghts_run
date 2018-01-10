@@ -1,0 +1,104 @@
+variable    boxSize                  equal 500e-4
+variable    diameter                 equal 50e-4
+variable    initialSurfaceSeparation equal 5.3e-4
+variable    cutoffDividedByDiameter  equal 0.1000001
+
+hard_particles  yes
+soft_particles  yes
+atom_style      granular
+atom_modify     map array 
+communicate     single vel yes
+
+boundary        f f f
+newton          off
+
+units           si #XXX: using other units that SI is STRONGLY discouraged!
+
+region          reg block 0.0 ${boxSize} 0.0 ${boxSize} 0.0 ${boxSize} units box 
+create_box      1 reg
+
+neighbor        ${diameter} bin #skin distance is 1 particle diam
+neigh_modify    delay 0 
+#neigh_modify	delay 0 contact_distance_factor 2
+
+############################## END USER INPUT #############################
+###########################################################################
+variable     boxCenter              equal ${boxSize}*0.5
+variable     boxCenterZUpDelta      equal ${boxCenter}+${diameter}+${initialSurfaceSeparation} 
+variable     dimLesscutoffDistance  equal 1+${cutoffDividedByDiameter}
+
+# Material properties required for granular pair styles
+fix         m1 all property/global youngsModulus peratomtype 1.e12 
+fix         m2 all property/global poissonsRatio peratomtype 0.28  
+fix         m3 all property/global coefficientRestitution peratomtypepair 1 1  # here we put 1 to test lubrication 
+fix         m4 all property/global coefficientFriction peratomtypepair 1 0     
+
+fix 	l1 all property/global minSeparationDistanceRatio scalar 1e-1
+fix 	l2 all property/global maxSeparationDistanceRatio scalar ${dimLesscutoffDistance}
+fix 	l5 all property/global fluidViscosity scalar 1.94e-4 #XXX: this should be set via a StokesNumber
+
+# pair style
+
+pair_style gran model hertz tangential history cohesion lubrication  
+pair_coeff  * *
+
+# timestep, gravity
+timestep    1e-5
+#fix         gravi all gravity 0 vector 0.0 0.0 -1.0 
+
+# walls
+#fix     xwalls1 all wall/gran model hertz tangential  primitive type 1 xplane 0.0
+#fix     xwalls2 all wall/gran model hertz tangential  primitive type 1 xplane 500.0e-4
+#fix     ywalls1 all wall/gran model hertz tangential primitive type 1 yplane  0.0
+#fix     ywalls2 all wall/gran model hertz tangential  primitive type 1 yplane 500.0e-4
+#fix     zwalls1 all wall/gran model hertz tangential  primitive type 1 zplane 0.0
+#fix     zwalls2 all wall/gran model hertz tangential  primitive type 1 zplane 500.0e-4
+
+# create single partciles
+create_atoms    1 single ${boxCenter} ${boxCenter} ${boxCenterZUpDelta} units box 
+create_atoms    1 single ${boxCenter} ${boxCenter} ${boxCenter}         units box
+
+#set             group all diameter 0.08 density 3000
+set atom 1 diameter ${diameter} density 1.400 vx 0 vy 0 vz -1.0  # for hmin/h0=1/10 => critical stokes num=2, => critical velocity=0.4989  cm/s
+
+set atom 2 diameter ${diameter} density 1.400 vx 0 vy 0 vz 0  
+
+group moving id 1
+group anchor id 2
+
+fix 1 anchor freeze
+
+
+variable        vx1 equal vx[1]
+variable        vy1 equal vy[1]
+variable        vz1 equal vz[1]
+variable        vx2 equal vx[2]
+variable        vy2 equal vy[2]
+variable        vz2 equal vz[2]
+variable        x1 equal x[1]
+variable        y1 equal y[1]
+variable        z1 equal z[1]
+variable        x2 equal x[2]
+variable        y2 equal y[2]
+variable        z2 equal z[2]
+variable        time equal step*dt
+variable        fL equal fz[1]
+
+fix         extra1 all print 1 "${time} ${x1}  ${y1}  ${z1} ${vx1} ${vy1} ${vz1} ${fL}" file post/velocity_particle_1.txt title "#" screen no
+fix         extra2 all print 1 "${time} ${x2}  ${y2}  ${z2} ${vx2} ${vy2} ${vz2}" file post/velocity_particle_2.txt title "#" screen no
+
+
+# apply nve integration to all particles that are inserted as single particles
+fix         integr all nve/sphere
+
+# screen output
+compute         rke all erotate/sphere
+thermo_style    custom step atoms ke c_rke vol
+thermo          1
+thermo_modify   lost ignore norm no
+compute_modify  thermo_temp dynamic yes
+
+dump    dmp all custom 1 post/dump.liggghts_run id type x y z vx vy vz fx fy fz omegax omegay omegaz radius
+
+run     20 
+

@@ -1,0 +1,4 @@
+set xlabel "z-pos"
+set ylabel "Vel"
+plot "post/velocity_particle_1.txt"  using 4:7
+pause -1
