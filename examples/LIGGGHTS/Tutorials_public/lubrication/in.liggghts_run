@@ -1,6 +1,6 @@
 variable    boxSize                  equal 500e-4
 variable    diameter                 equal 50e-4
-variable    initialSurfaceSeparation equal 5.3e-4
+variable    initialSurfaceSeparation equal 4.1e-4
 variable    cutoffDividedByDiameter  equal 0.1000001
 
 hard_particles  yes
@@ -19,7 +19,6 @@ create_box      1 reg
 
 neighbor        ${diameter} bin #skin distance is 1 particle diam
 neigh_modify    delay 0 
-#neigh_modify	delay 0 contact_distance_factor 2
 
 ############################## END USER INPUT #############################
 ###########################################################################
@@ -33,10 +32,10 @@ fix         m2 all property/global poissonsRatio peratomtype 0.28
 fix         m3 all property/global coefficientRestitution peratomtypepair 1 1  # here we put 1 to test lubrication 
 fix         m4 all property/global coefficientFriction peratomtypepair 1 0     
 
-fix 	l1 all property/global minSeparationDistanceRatio scalar 1e-1
-fix 	l2 all property/global maxSeparationDistanceRatio scalar ${dimLesscutoffDistance}
-fix 	l5 all property/global fluidViscosity scalar 1.94e-4 #XXX: this should be set via a StokesNumber
-
+fix 	lMinSep all property/global minSeparationDistanceRatio scalar 1e-2
+fix 	lMaxSep all property/global maxSeparationDistanceRatio scalar ${dimLesscutoffDistance}
+fix 	lFluidVisc all property/global fluidViscosity scalar 1.94e-4 #XXX: this should be set via a StokesNumber
+fix     lModelSw all   property/global  modelSwitchLubrication scalar 0 #switch to choose between lubration model details
 # pair style
 
 pair_style gran model hertz tangential history cohesion lubrication  
@@ -59,7 +58,7 @@ create_atoms    1 single ${boxCenter} ${boxCenter} ${boxCenterZUpDelta} units bo
 create_atoms    1 single ${boxCenter} ${boxCenter} ${boxCenter}         units box
 
 #set             group all diameter 0.08 density 3000
-set atom 1 diameter ${diameter} density 1.400 vx 0 vy 0 vz -1.0  # for hmin/h0=1/10 => critical stokes num=2, => critical velocity=0.4989  cm/s
+set atom 1 diameter ${diameter} density 1.400 vx 0 vy 0 vz 1.0  # for hmin/h0=1/10 => critical stokes num=2, => critical velocity=0.4989  cm/s
 
 set atom 2 diameter ${diameter} density 1.400 vx 0 vy 0 vz 0  
 

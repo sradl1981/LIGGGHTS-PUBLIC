@@ -70,6 +70,12 @@ namespace MODEL_PARAMS
       return maxSeparationDistanceRatioScalar;
     }
 
+    inline static ScalarProperty* createModelSwitchLubrication(PropertyRegistry & registry, const char * caller, bool sanity_checks)
+    {
+      ScalarProperty* modelSwitchLubrication = MODEL_PARAMS::createScalarProperty(registry, "modelSwitchLubrication", caller);
+      return modelSwitchLubrication;
+    }
+
     inline static ScalarProperty* createFluidViscosityLubrication(PropertyRegistry & registry, const char * caller, bool sanity_checks)
     {
       ScalarProperty* fluidViscosityScalar = MODEL_PARAMS::createScalarProperty(registry, "fluidViscosity", caller);
@@ -90,6 +96,9 @@ namespace ContactModels {
       minSeparationDistanceRatio(0.0),
       maxSeparationDistanceRatio(0.0),
       fluidViscosity(0.),
+      modelSwitchLubrication(0),
+      modelSwitchHighOrderTermsOn(false), 
+      modelSwitchTangentialOn(false),
       history_offset(0)
     {
       history_offset = hsetup->add_history_value("contflag", "0");
@@ -110,12 +119,16 @@ namespace ContactModels {
       registry.registerProperty("fluidViscosity", &MODEL_PARAMS::createFluidViscosityLubrication);
       registry.registerProperty("minSeparationDistanceRatio", &MODEL_PARAMS::createMinSeparationDistanceRatioLubrication);
       registry.registerProperty("maxSeparationDistanceRatio", &MODEL_PARAMS::createMaxSeparationDistanceRatioLubrication);
+      registry.registerProperty("modelSwitchLubrication", &MODEL_PARAMS::createModelSwitchLubrication);
 
       registry.connect("fluidViscosity", fluidViscosity,"cohesion_model lubrication");
       registry.connect("minSeparationDistanceRatio", minSeparationDistanceRatio,"cohesion_model lubrication");
-      
       registry.connect("maxSeparationDistanceRatio", maxSeparationDistanceRatio,"cohesion_model lubrication");
-
+      double dummyDoubleValue;
+      registry.connect("modelSwitchLubrication", dummyDoubleValue, "cohesion_model lubrication");
+      modelSwitchLubrication = (int)dummyDoubleValue;
+      if(modelSwitchLubrication==1 || modelSwitchLubrication==11) modelSwitchHighOrderTermsOn = true; 
+      if(modelSwitchLubrication>9) modelSwitchTangentialOn = true;
       ln1overMinSeparationDistanceRatio = log(1./minSeparationDistanceRatio);
 
       // error checks on coarsegraining
@@ -142,18 +155,34 @@ namespace ContactModels {
       // store for noCollision
       contflag[0] = 1.0;
 
-      const double rEff = radi*radj / (radi+radj);
+      const double rEff = radi*radj / (radi+radj); //for equal spheres this is rad/2
     
-      // viscous force
-      // this is from Nase et al as cited in Shi and McCarthy, Powder Technology, 184 (2008), 65-75, Eqns 40,41
+      // viscous normal force
       const double stokesPreFactor = -6.*M_PI*fluidViscosity*rEff;
-      const double FviscN = stokesPreFactor*sidata.vn/minSeparationDistanceRatio;
-      const double FviscT_over_vt = (/* 8/15 */ 0.5333333*ln1overMinSeparationDistanceRatio + 0.9588) * stokesPreFactor;
+      const double FviscN = modelSwitchHighOrderTermsOn ?
+                            stokesPreFactor
+                          * sidata.vn
+                          * (sidata.is_wall ?
+                                particleWallNormalHighOrder(minSeparationDistanceRatio) 
+                               :particleParticleNormalHighOrder(minSeparationDistanceRatio) )
+                          : 
+                            stokesPreFactor
+                          * sidata.vn
+                          * (sidata.is_wall ?
+                                particleWallNormalSimple(minSeparationDistanceRatio) 
+                               :particleParticleNormalSimple(minSeparationDistanceRatio));
 
-      // tangential force components
-      const double Ft1 = FviscT_over_vt*sidata.vtr1;
-      const double Ft2 = FviscT_over_vt*sidata.vtr2;
-      const double Ft3 = FviscT_over_vt*sidata.vtr3;
+
+      // viscous tangential force 
+      const double FviscT_over_vt = modelSwitchTangentialOn ?
+                                    stokesPreFactor
+                                  * particleParticleTangentialVT(minSeparationDistanceRatio)
+                                  :          
+                                    0;
+
+      const double Ft1 = FviscT_over_vt    * sidata.vtr1; //Simplified treatment since only total sliding speed is known!
+      const double Ft2 = FviscT_over_vt    * sidata.vtr2;
+      const double Ft3 = FviscT_over_vt    * sidata.vtr3;
 
       // torques
       const double tor1 = sidata.en[1] * Ft3 - sidata.en[2] * Ft2;
@@ -210,8 +239,22 @@ namespace ContactModels {
       const double radi = scdata.radi;
       const double radj = scdata.is_wall ? radi : scdata.radj;
       const double r = sqrt(scdata.rsq);
-      const double dist = scdata.is_wall ? r - radi : r - (radi + radj);
 
+#if COHESION_MODEL_LUBRICATION_VERBOSE
+      printf("Coh_lubrication_surfacesClose, radi/radj: %.3g / %.3g, r: %.3g, critical distance: %.3g \n", 
+                radi, radj, r, maxSeparationDistanceRatio*(radi+radj)
+            );
+#endif
+
+      //exit in case particles are too far apart
+      if(r>maxSeparationDistanceRatio*(radi+radj))
+      {
+        contflag[0] = 0.0;
+        scdata.has_force_update = false;
+        return;
+      }
+
+      const double dist = scdata.is_wall ? r - radi : r - (radi + radj);
       const double rEff = radi*radj / (radi+radj);
 
       double **v = atom->v;
@@ -224,7 +267,7 @@ namespace ContactModels {
       const double dx = scdata.delta[0];
       const double dy = scdata.delta[1];
       const double dz = scdata.delta[2];
-      const double enx = dx * rinv;
+      const double enx = dx * rinv; //unity vector
       const double eny = dy * rinv;
       const double enz = dz * rinv;
 
@@ -239,7 +282,7 @@ namespace ContactModels {
       const double vn2 = vn * eny;
       const double vn3 = vn * enz;
 
-      // tangential component
+      // tangential component (translational motion ONLY!)
       const double vt1 = vr1 - vn1;
       const double vt2 = vr2 - vn2;
       const double vt3 = vr3 - vn3;
@@ -254,33 +297,62 @@ namespace ContactModels {
             wr2 = radi * omega_i[1] * rinv;
             wr3 = radi * omega_i[2] * rinv;
       } else {
-            wr1 = (radi * omega_i[0] + radj * omega_j[0]) * rinv;
-            wr2 = (radi * omega_i[1] + radj * omega_j[1]) * rinv;
-            wr3 = (radi * omega_i[2] + radj * omega_j[2]) * rinv;
+            wr1 = radi * omega_i[0] + radj * omega_j[0];
+            wr2 = radi * omega_i[1] + radj * omega_j[1];
+            wr3 = radi * omega_i[2] + radj * omega_j[2];
       }
 
-      // relative velocities
-      const double vtr1 = vt1 - (dz * wr2 - dy * wr3);
-      const double vtr2 = vt2 - (dx * wr3 - dz * wr1);
-      const double vtr3 = vt3 - (dy * wr1 - dx * wr2);
+      // relative velocities (Rotational motion ONLY!)
+      const double vtRot1 = -(enz * wr2 - eny * wr3);
+      const double vtRot2 = -(enx * wr3 - enz * wr1);
+      const double vtRot3 = -(eny * wr1 - enx * wr2);
 
-      // viscous force
-      // this is from Nase et al as cited in Shi and McCarthy, Powder Technology, 184 (2008), 65-75, Eqns 40,41
+      // viscous normal force
       const double stokesPreFactor = -6.*M_PI*fluidViscosity*rEff;
-      const double FviscN = stokesPreFactor*vn/std::max(minSeparationDistanceRatio,dist/rEff);
-      const double FviscT_over_vt = (/* 8/15 */ 0.5333333*log(1./std::max(minSeparationDistanceRatio,dist/rEff)) + 0.9588) * stokesPreFactor;
+      const double FviscN = modelSwitchHighOrderTermsOn ?
+                            stokesPreFactor
+                          * vn
+                          * (scdata.is_wall ?
+                                particleWallNormalHighOrder(std::max(minSeparationDistanceRatio,dist/rEff)) 
+                               :particleParticleNormalHighOrder(std::max(minSeparationDistanceRatio,dist/rEff)) )
+                          : 
+                            stokesPreFactor
+                          * vn
+                          * (scdata.is_wall ?
+                                particleWallNormalSimple(std::max(minSeparationDistanceRatio,dist/rEff)) 
+                               :particleParticleNormalSimple(std::max(minSeparationDistanceRatio,dist/rEff)));
 
-      // tangential force components
-      const double Ft1 = FviscT_over_vt*vtr1;
-      const double Ft2 = FviscT_over_vt*vtr2;
-      const double Ft3 = FviscT_over_vt*vtr3;
 
-      // torques
+      // viscous tangential force 
+      const double FviscT_over_vt = modelSwitchTangentialOn ?
+                                    stokesPreFactor
+                                  * (scdata.is_wall ?
+                                        particleWallTangentialVT(std::max(minSeparationDistanceRatio,dist/rEff))
+                                       :particleParticleTangentialVT(std::max(minSeparationDistanceRatio,dist/rEff)))
+                                  :          
+                                    0;
+
+      const double FviscT_over_vtRot = modelSwitchTangentialOn ?
+                                       stokesPreFactor
+                                     * (scdata.is_wall ?
+                                        particleWallTangentialVTRot(std::max(minSeparationDistanceRatio,dist/rEff))
+                                       :particleParticleTangentialVTRot(std::max(minSeparationDistanceRatio,dist/rEff)))
+                                     :          
+                                       0;
+
+      const double Ft1 = FviscT_over_vt    * vt1
+                       + FviscT_over_vtRot * vtRot1;
+      const double Ft2 = FviscT_over_vt    * vt2
+                       + FviscT_over_vtRot * vtRot2;
+      const double Ft3 = FviscT_over_vt    * vt3
+                       + FviscT_over_vtRot * vtRot3;
+
+      // torques (EXCLUDES twisting torque1)
       const double tor1 = eny * Ft3 - enz * Ft2;
       const double tor2 = enz * Ft1 - enx * Ft3;
       const double tor3 = enx * Ft2 - eny * Ft1;
 
-      // apply normal and tangential force
+      // apply normal and TOTAL tangential force
       const double fx = FviscN * enx + Ft1;
       const double fy = FviscN * eny + Ft2;
       const double fz = FviscN * enz + Ft3;
@@ -288,8 +360,9 @@ namespace ContactModels {
       scdata.has_force_update = true;
 
 #if COHESION_MODEL_LUBRICATION_VERBOSE
-      printf("Coh_lubrication_surfacesClose, FviscN: %.3g, vn: %.3g \n", 
-                FviscN, vn
+      printf("Coh_lubrication_surfacesClose, FviscN: %.3g, vn: %.3g, FviscT: %.3g %.3g %.3g \n", 
+                FviscN, vn,
+                Ft1, Ft2, Ft3
             );
 #endif
 
@@ -322,9 +395,74 @@ namespace ContactModels {
 
   private:
     double minSeparationDistanceRatio, maxSeparationDistanceRatio, fluidViscosity;
+    int    modelSwitchLubrication;
+    bool   modelSwitchHighOrderTermsOn, modelSwitchTangentialOn;
     double ln1overMinSeparationDistanceRatio;
     int history_offset;
     bool tangentialReduce_;
+
+    //-------------------------------------------------------------------
+    //Functions implementing the force coefficient calculations PARTICLE-PARTICLE
+    //NORMAL FORCE
+    double particleParticleNormalSimple(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238  & Kosek et al., Langmuir 32, p.8453. Only first term! 
+        //Note, we use rEff for the Stokes prefactor AND normalizedSepDistance: so need to multiply with 4! (see also Brenner, 1961, Chem Eng Sci
+        return 1.0/normalizedSepDistance;
+    }
+    double particleParticleNormalHighOrder(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238  & Kosek et al., Langmuir 32, p.8453. Full terms. Note, we use rEff, so need to multiply with 4 and 2 
+        return  1.0  / normalizedSepDistance 
+              - 0.45 * log(0.5*normalizedSepDistance)
+              - 2.6786e-2 * normalizedSepDistance * log(0.5*normalizedSepDistance);
+    }
+
+    //TANGENIAL FORCE
+    double particleParticleTangentialVT(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238 & Kosek et al., Langmuir 32, p.8453. Only first term! 
+        //Note, we use rEff for the Stokes prefactor AND normalizedSepDistance: so need to multiply with 2! 
+        return -0.333333333333 * log(0.5*normalizedSepDistance);
+    }
+    double particleParticleTangentialVTRot(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238  & Kosek et al., Langmuir 32, p.8453. Only first term! 
+        //Note, we use rEff for the Stokes prefactor AND normalizedSepDistance: so need to multiply with 2 and 1!
+        return -0.333333333333 * log(0.5*normalizedSepDistance)
+               -0.083333333333 * normalizedSepDistance * log(0.5*normalizedSepDistance);
+    }
+
+
+    //-------------------------------------------------------------------
+    //Functions implementing the force coefficient calculations PARTICLE-WALL
+    double particleWallNormalSimple(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238 & Kosek et al., Langmuir 32, p.8453. First term only
+        return  1.0  / normalizedSepDistance;
+    }
+    double particleWallNormalHighOrder(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238 & Kosek et al., Langmuir 32, p.8453. Full terms.
+        return  1.0  / normalizedSepDistance 
+              - 0.20 * log(normalizedSepDistance)
+              - 4.7619e-2 * normalizedSepDistance * log(normalizedSepDistance);
+    }
+
+    //TANGENIAL FORCE
+    double particleWallTangentialVT(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238 & Kosek et al., Langmuir 32, p.8453. Full terms.
+        return -0.533333333333 * log(normalizedSepDistance)
+               -0.170666667 * normalizedSepDistance* log(normalizedSepDistance);
+    }
+    double particleWallTangentialVTRot(double normalizedSepDistance)    
+    {
+        //Dance and Maxey, J Comp Phys 189:212-238 & Kosek et al., Langmuir 32, p.8453. Full terms.
+        return -0.133333333333 * log(normalizedSepDistance)
+               -0.229333333333 * normalizedSepDistance* log(normalizedSepDistance);
+    }
+
   };
 }
 }
