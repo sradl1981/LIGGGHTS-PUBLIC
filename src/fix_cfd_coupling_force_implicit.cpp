@@ -63,7 +63,7 @@ using namespace FixConst;
 FixCfdCouplingForceImplicit::FixCfdCouplingForceImplicit(LAMMPS *lmp, int narg, char **arg) :
     FixCfdCouplingForce(lmp,narg,arg),
     useCN_(false),
-    CNalpha_(0.0),
+    CNalpha_(0.5),
     useAM_(false),
     CAddRhoFluid_(0.0),
     onePlusCAddRhoFluid_(1.0),
