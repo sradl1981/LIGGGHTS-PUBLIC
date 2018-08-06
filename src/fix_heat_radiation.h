@@ -81,15 +81,15 @@ namespace LAMMPS_NS {
     //vector< vector<double> > view_factors_;
 
     bool init_points_on_sphere_;
-    bool solve_reflection_;
-    int solve_counter_;
 
     double* x_points_origin_;
     double* y_points_origin_;
     double* z_points_origin_;
     int number_of_distributed_points_;
-    int solve_every_ ;
-    
+
+    int  solve_every_ ;
+    bool solve_reflection_; 
+    int  solve_counter_;    
     /*double x_points_particle_[];
     double y_points_particle_[];
     double z_points_particle_[]; */   

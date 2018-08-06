@@ -74,9 +74,9 @@ using namespace FixConst;
 FixHeatRad::FixHeatRad(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg),
   init_points_on_sphere_(false),
-  solve_reflection_(false),
   number_of_distributed_points_(0),
   solve_every_(0),
+  solve_reflection_(false),
   solve_counter_(0),
   radius_drum_(0.0),
   temp_drum_(0.0)
